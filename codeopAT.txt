@@ -1,0 +1,277 @@
+import java.util.*;
+
+class TACInstruction {
+    String operator;
+    String arg1;
+    String arg2;
+    String result;
+    
+    public TACInstruction(String operator, String arg1, String arg2, String result) {
+        this.operator = operator;
+        this.arg1 = arg1;
+        this.arg2 = arg2;
+        this.result = result;
+    }
+    
+    // Copy constructor
+    public TACInstruction(TACInstruction other) {
+        this.operator = other.operator;
+        this.arg1 = other.arg1;
+        this.arg2 = other.arg2;
+        this.result = other.result;
+    }
+    
+    @Override
+    public String toString() {
+        return result + " = " + arg1 + " " + operator + " " + arg2;
+    }
+}
+
+class AlgebraicOptimizer {
+    private List<TACInstruction> instructions;
+    private Map<String, String> constantFolds;
+    private int tempVarCounter;
+    
+    public AlgebraicOptimizer(List<TACInstruction> instructions) {
+        this.instructions = new ArrayList<>(instructions);
+        this.constantFolds = new HashMap<>();
+        this.tempVarCounter = 0;
+    }
+    
+    private String generateTempVar() {
+        return "t" + (++tempVarCounter);
+    }
+    
+    private boolean isNumber(String str) {
+        try {
+            Double.parseDouble(str);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+    
+    public List<TACInstruction> optimize() {
+        List<TACInstruction> optimizedInstructions = new ArrayList<>();
+        
+        // First pass: Constant folding and basic algebraic simplifications
+        for (int i = 0; i < instructions.size(); i++) {
+            TACInstruction curr = instructions.get(i);
+            List<TACInstruction> optimized = optimizeInstruction(curr);
+            optimizedInstructions.addAll(optimized);
+        }
+        
+        // Second pass: Common subexpression elimination and further optimizations
+        return performSecondPassOptimization(optimizedInstructions);
+    }
+    
+    private List<TACInstruction> performSecondPassOptimization(List<TACInstruction> firstPassInstructions) {
+        List<TACInstruction> finalInstructions = new ArrayList<>();
+        Map<String, String> expressions = new HashMap<>();
+        
+        for (TACInstruction instr : firstPassInstructions) {
+            String exprKey = generateExpressionKey(instr);
+            if (expressions.containsKey(exprKey)) {
+                // Reuse previous result instead of computing again
+                finalInstructions.add(new TACInstruction("=", expressions.get(exprKey), null, instr.result));
+            } else {
+                expressions.put(exprKey, instr.result);
+                finalInstructions.add(instr);
+            }
+        }
+        
+        return finalInstructions;
+    }
+    
+    private String generateExpressionKey(TACInstruction instr) {
+        if (instr.operator.equals("=")) {
+            return instr.arg1;
+        }
+        return instr.arg1 + instr.operator + instr.arg2;
+    }
+    
+    private List<TACInstruction> optimizeInstruction(TACInstruction instr) {
+        List<TACInstruction> optimized = new ArrayList<>();
+        
+        // Handle different types of algebraic transformations
+        switch (instr.operator) {
+            case "+":
+                optimized.addAll(optimizeAddition(instr));
+                break;
+            case "-":
+                optimized.addAll(optimizeSubtraction(instr));
+                break;
+            case "*":
+                optimized.addAll(optimizeMultiplication(instr));
+                break;
+            case "/":
+                optimized.addAll(optimizeDivision(instr));
+                break;
+            default:
+                optimized.add(instr);
+        }
+        
+        return optimized;
+    }
+    
+    private List<TACInstruction> optimizeAddition(TACInstruction instr) {
+        List<TACInstruction> optimized = new ArrayList<>();
+        
+        // x + 0 = x or 0 + x = x
+        if (instr.arg1.equals("0")) {
+            optimized.add(new TACInstruction("=", instr.arg2, null, instr.result));
+            return optimized;
+        }
+        if (instr.arg2.equals("0")) {
+            optimized.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimized;
+        }
+        
+        // Constant folding for addition
+        if (isNumber(instr.arg1) && isNumber(instr.arg2)) {
+            double result = Double.parseDouble(instr.arg1) + Double.parseDouble(instr.arg2);
+            optimized.add(new TACInstruction("=", String.valueOf(result), null, instr.result));
+            return optimized;
+        }
+        
+        // x + x = 2 * x
+        if (instr.arg1.equals(instr.arg2)) {
+            optimized.add(new TACInstruction("*", instr.arg1, "2", instr.result));
+            return optimized;
+        }
+        
+        optimized.add(instr);
+        return optimized;
+    }
+    
+    private List<TACInstruction> optimizeSubtraction(TACInstruction instr) {
+        List<TACInstruction> optimized = new ArrayList<>();
+        
+        // x - 0 = x
+        if (instr.arg2.equals("0")) {
+            optimized.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimized;
+        }
+        
+        // x - x = 0
+        if (instr.arg1.equals(instr.arg2)) {
+            optimized.add(new TACInstruction("=", "0", null, instr.result));
+            return optimized;
+        }
+        
+        // Constant folding for subtraction
+        if (isNumber(instr.arg1) && isNumber(instr.arg2)) {
+            double result = Double.parseDouble(instr.arg1) - Double.parseDouble(instr.arg2);
+            optimized.add(new TACInstruction("=", String.valueOf(result), null, instr.result));
+            return optimized;
+        }
+        
+        optimized.add(instr);
+        return optimized;
+    }
+    
+    private List<TACInstruction> optimizeMultiplication(TACInstruction instr) {
+        List<TACInstruction> optimized = new ArrayList<>();
+        
+        // x * 0 = 0 or 0 * x = 0
+        if (instr.arg1.equals("0") || instr.arg2.equals("0")) {
+            optimized.add(new TACInstruction("=", "0", null, instr.result));
+            return optimized;
+        }
+        
+        // x * 1 = x or 1 * x = x
+        if (instr.arg1.equals("1")) {
+            optimized.add(new TACInstruction("=", instr.arg2, null, instr.result));
+            return optimized;
+        }
+        if (instr.arg2.equals("1")) {
+            optimized.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimized;
+        }
+        
+        // Constant folding for multiplication
+        if (isNumber(instr.arg1) && isNumber(instr.arg2)) {
+            double result = Double.parseDouble(instr.arg1) * Double.parseDouble(instr.arg2);
+            optimized.add(new TACInstruction("=", String.valueOf(result), null, instr.result));
+            return optimized;
+        }
+        
+        optimized.add(instr);
+        return optimized;
+    }
+    
+    private List<TACInstruction> optimizeDivision(TACInstruction instr) {
+        List<TACInstruction> optimized = new ArrayList<>();
+        
+        // x / 1 = x
+        if (instr.arg2.equals("1")) {
+            optimized.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimized;
+        }
+        
+        // x / x = 1 (when x ≠ 0)
+        if (instr.arg1.equals(instr.arg2)) {
+            optimized.add(new TACInstruction("=", "1", null, instr.result));
+            return optimized;
+        }
+        
+        // 0 / x = 0 (when x ≠ 0)
+        if (instr.arg1.equals("0")) {
+            optimized.add(new TACInstruction("=", "0", null, instr.result));
+            return optimized;
+        }
+        
+        // Constant folding for division
+        if (isNumber(instr.arg1) && isNumber(instr.arg2)) {
+            double divisor = Double.parseDouble(instr.arg2);
+            if (divisor != 0) {
+                double result = Double.parseDouble(instr.arg1) / divisor;
+                optimized.add(new TACInstruction("=", String.valueOf(result), null, instr.result));
+                return optimized;
+            }
+        }
+        
+        optimized.add(instr);
+        return optimized;
+    }
+}
+
+// Main test class
+public class CompilerBackend {
+    public static void main(String[] args) {
+        // Test cases for algebraic transformations
+        List<TACInstruction> instructions = new ArrayList<>();
+        
+        // Test case 1: Addition with 0
+        instructions.add(new TACInstruction("+", "x", "0", "t1"));
+        
+        // Test case 2: Multiplication with 1
+        instructions.add(new TACInstruction("*", "y", "1", "t2"));
+        
+        // Test case 3: Subtraction of same variable
+        instructions.add(new TACInstruction("-", "z", "z", "t3"));
+        
+        // Test case 4: Constant folding
+        instructions.add(new TACInstruction("+", "5", "3", "t4"));
+        
+        // Test case 5: Common subexpression
+        instructions.add(new TACInstruction("+", "a", "b", "t5"));
+        instructions.add(new TACInstruction("*", "t5", "2", "t6"));
+        instructions.add(new TACInstruction("+", "a", "b", "t7")); // Should reuse t5
+        
+        // Apply optimization
+        AlgebraicOptimizer optimizer = new AlgebraicOptimizer(instructions);
+        List<TACInstruction> optimizedInstructions = optimizer.optimize();
+        
+        // Print results
+        System.out.println("Original Instructions:");
+        for (TACInstruction instr : instructions) {
+            System.out.println(instr);
+        }
+        
+        System.out.println("\nOptimized Instructions:");
+        for (TACInstruction instr : optimizedInstructions) {
+            System.out.println(instr);
+        }
+    }
+}

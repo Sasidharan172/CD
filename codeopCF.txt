@@ -1,0 +1,138 @@
+import java.util.*;
+
+class ThreeAddressCode {
+  String result;
+  String operator;
+  String operand1;
+  String operand2;
+
+  public ThreeAddressCode(String result, String operator, String operand1, String operand2) {
+    this.result = result;
+    this.operator = operator;
+    this.operand1 = operand1;
+    this.operand2 = operand2;
+  }
+
+  @Override
+  public String toString() {
+    if (operator.equals("=")) {
+      return result + " = " + operand1;
+    }
+    return result + " = " + operand1 + " " + operator + " " + operand2;
+  }
+}
+
+public class ConstantFolding {
+  private List<ThreeAddressCode> code;
+  private Map<String, String> constantTable;
+
+  public ConstantFolding() {
+    this.code = new ArrayList<>();
+    this.constantTable = new HashMap<>();
+  }
+
+  public void addInstruction(String result, String operator, String operand1, String operand2) {
+    code.add(new ThreeAddressCode(result, operator, operand1, operand2));
+  }
+
+  private boolean isNumeric(String str) {
+    try {
+      Double.parseDouble(str);
+      return true;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  private String evaluateConstantExpression(String op1, String operator, String op2) {
+    double num1 = Double.parseDouble(op1);
+    double num2 = Double.parseDouble(op2);
+    double result = 0;
+
+    switch (operator) {
+      case "+":
+        result = num1 + num2;
+        break;
+      case "-":
+        result = num1 - num2;
+        break;
+      case "*":
+        result = num1 * num2;
+        break;
+      case "/":
+        if (num2 != 0) {
+          result = num1 / num2;
+        } else {
+          throw new ArithmeticException("Division by zero");
+        }
+        break;
+    }
+
+    // Convert to integer if result is a whole number
+    if (result == (int) result) {
+      return String.valueOf((int) result);
+    }
+    return String.valueOf(result);
+  }
+
+  public List<ThreeAddressCode> optimize() {
+    List<ThreeAddressCode> optimizedCode = new ArrayList<>();
+    constantTable.clear();
+
+    for (ThreeAddressCode instruction : code) {
+      String op1 = instruction.operand1;
+      String op2 = instruction.operand2;
+
+      // Replace variables with their constant values if available
+      if (constantTable.containsKey(op1)) {
+        op1 = constantTable.get(op1);
+      }
+      if (constantTable.containsKey(op2)) {
+        op2 = constantTable.get(op2);
+      }
+
+      // Check if both operands are constants
+      if (instruction.operator.equals("=")) {
+        if (isNumeric(op1)) {
+          constantTable.put(instruction.result, op1);
+          optimizedCode.add(new ThreeAddressCode(instruction.result, "=", op1, null));
+        } else {
+          optimizedCode.add(new ThreeAddressCode(instruction.result, "=", op1, null));
+          constantTable.remove(instruction.result);
+        }
+      } else if (isNumeric(op1) && isNumeric(op2)) {
+        // Perform constant folding
+        String evaluatedResult = evaluateConstantExpression(op1, instruction.operator, op2);
+        constantTable.put(instruction.result, evaluatedResult);
+        optimizedCode.add(new ThreeAddressCode(instruction.result, "=", evaluatedResult, null));
+      } else {
+        // Cannot fold, add original instruction with possibly substituted operands
+        optimizedCode.add(new ThreeAddressCode(instruction.result, instruction.operator, op1, op2));
+        constantTable.remove(instruction.result);
+      }
+    }
+
+    return optimizedCode;
+  }
+
+  public static void main(String[] args) {
+    // Example usage
+    ConstantFolding cf = new ConstantFolding();
+
+    // Sample three address code
+    cf.addInstruction("x", "=", "5", null);
+    cf.addInstruction("y", "=", "10", null);
+    cf.addInstruction("z", "+", "x", "y");
+    cf.addInstruction("w", "*", "z", "2");
+    cf.addInstruction("a", "+", "w", "3");
+    cf.addInstruction("b", "*", "a", "x");
+
+    System.out.println("Original Code:");
+    cf.code.forEach(System.out::println);
+
+    List<ThreeAddressCode> optimizedCode = cf.optimize();
+
+    System.out.println("\nOptimized Code:");
+    optimizedCode.forEach(System.out::println);
+  }
+}

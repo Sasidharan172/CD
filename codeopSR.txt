@@ -1,0 +1,257 @@
+import java.util.*;
+
+class TACInstruction {
+    String operator;
+    String arg1;
+    String arg2;
+    String result;
+    
+    public TACInstruction(String operator, String arg1, String arg2, String result) {
+        this.operator = operator;
+        this.arg1 = arg1;
+        this.arg2 = arg2;
+        this.result = result;
+    }
+    
+    @Override
+    public String toString() {
+        return result + " = " + arg1 + " " + operator + " " + arg2;
+    }
+}
+
+class StrengthReductionOptimizer {
+    private List<TACInstruction> instructions;
+    private int tempVarCounter = 0;
+    
+    public StrengthReductionOptimizer(List<TACInstruction> instructions) {
+        this.instructions = instructions;
+    }
+    
+    private String generateTempVar() {
+        return "t" + (++tempVarCounter);
+    }
+    
+    private boolean isPowerOfTwo(String value) {
+        try {
+            int num = Integer.parseInt(value);
+            return num > 0 && (num & (num - 1)) == 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+    
+    private int getPowerOfTwo(int number) {
+        return (int)(Math.log(number) / Math.log(2));
+    }
+    
+    public List<TACInstruction> optimize() {
+        List<TACInstruction> optimizedInstructions = new ArrayList<>();
+        
+        for (TACInstruction instr : instructions) {
+            List<TACInstruction> optimizedInstr = optimizeInstruction(instr);
+            optimizedInstructions.addAll(optimizedInstr);
+        }
+        
+        return optimizedInstructions;
+    }
+    
+    private List<TACInstruction> optimizeInstruction(TACInstruction instr) {
+        List<TACInstruction> optimizedInstructions = new ArrayList<>();
+        
+        switch (instr.operator) {
+            case "*":
+                optimizedInstructions.addAll(optimizeMultiplication(instr));
+                break;
+            case "/":
+                optimizedInstructions.addAll(optimizeDivision(instr));
+                break;
+            default:
+                optimizedInstructions.add(instr);
+        }
+        
+        return optimizedInstructions;
+    }
+    
+    private List<TACInstruction> optimizeMultiplication(TACInstruction instr) {
+        List<TACInstruction> optimizedInstructions = new ArrayList<>();
+        
+        // Case 1: Multiplication by 0
+        if (instr.arg1.equals("0") || instr.arg2.equals("0")) {
+            optimizedInstructions.add(new TACInstruction("=", "0", null, instr.result));
+            return optimizedInstructions;
+        }
+        
+        // Case 2: Multiplication by 1
+        if (instr.arg1.equals("1")) {
+            optimizedInstructions.add(new TACInstruction("=", instr.arg2, null, instr.result));
+            return optimizedInstructions;
+        }
+        if (instr.arg2.equals("1")) {
+            optimizedInstructions.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimizedInstructions;
+        }
+        
+        // Case 3: Multiplication by power of 2
+        if (isPowerOfTwo(instr.arg1)) {
+            int power = getPowerOfTwo(Integer.parseInt(instr.arg1));
+            optimizedInstructions.add(new TACInstruction("<<", instr.arg2, String.valueOf(power), instr.result));
+            return optimizedInstructions;
+        }
+        if (isPowerOfTwo(instr.arg2)) {
+            int power = getPowerOfTwo(Integer.parseInt(instr.arg2));
+            optimizedInstructions.add(new TACInstruction("<<", instr.arg1, String.valueOf(power), instr.result));
+            return optimizedInstructions;
+        }
+        
+        // Case 4: Multiplication by constant that's close to power of 2
+        try {
+            int arg2Val = Integer.parseInt(instr.arg2);
+            if (arg2Val > 0) {
+                int nearestPowerOf2 = Integer.highestOneBit(arg2Val);
+                if (Math.abs(arg2Val - nearestPowerOf2) == 1) {
+                    String temp = generateTempVar();
+                    optimizedInstructions.add(new TACInstruction("<<", instr.arg1, 
+                        String.valueOf(getPowerOfTwo(nearestPowerOf2)), temp));
+                    if (arg2Val > nearestPowerOf2) {
+                        optimizedInstructions.add(new TACInstruction("+", temp, instr.arg1, instr.result));
+                    } else {
+                        optimizedInstructions.add(new TACInstruction("-", temp, instr.arg1, instr.result));
+                    }
+                    return optimizedInstructions;
+                }
+            }
+        } catch (NumberFormatException e) {
+            // Not a constant, continue with normal multiplication
+        }
+        
+        // Default: Keep original multiplication
+        optimizedInstructions.add(instr);
+        return optimizedInstructions;
+    }
+    
+    private List<TACInstruction> optimizeDivision(TACInstruction instr) {
+        List<TACInstruction> optimizedInstructions = new ArrayList<>();
+        
+        // Case 1: Division by 1
+        if (instr.arg2.equals("1")) {
+            optimizedInstructions.add(new TACInstruction("=", instr.arg1, null, instr.result));
+            return optimizedInstructions;
+        }
+        
+        // Case 2: Division by power of 2
+        if (isPowerOfTwo(instr.arg2)) {
+            int power = getPowerOfTwo(Integer.parseInt(instr.arg2));
+            optimizedInstructions.add(new TACInstruction(">>", instr.arg1, String.valueOf(power), instr.result));
+            return optimizedInstructions;
+        }
+        
+        // Default: Keep original division
+        optimizedInstructions.add(instr);
+        return optimizedInstructions;
+    }
+}
+
+// Enhanced CompilerBackend class with strength reduction optimization
+public class CompilerBackend {
+    private List<String> assemblyCode;
+    private Set<String> variables;
+    
+    public CompilerBackend() {
+        this.assemblyCode = new ArrayList<>();
+        this.variables = new HashSet<>();
+    }
+    
+    private void generateShiftInstruction(TACInstruction instr) {
+        String operation = instr.operator.equals("<<") ? "SHL" : "SHR";
+        assemblyCode.add("MOV AX, " + getOperandValue(instr.arg1));
+        assemblyCode.add(operation + " AX, " + instr.arg2);
+        assemblyCode.add("MOV " + getOperandValue(instr.result) + ", AX");
+    }
+    
+    private String getOperandValue(String operand) {
+        if (operand == null) return "";
+        if (operand.matches("-?\\d+")) return operand;
+        return "WORD PTR [" + operand + "]";
+    }
+    
+    public String compile(List<TACInstruction> originalInstructions) {
+        // Apply strength reduction optimization
+        StrengthReductionOptimizer optimizer = new StrengthReductionOptimizer(originalInstructions);
+        List<TACInstruction> instructions = optimizer.optimize();
+        
+        // Generate code sections
+        generateDataSection(instructions);
+        generateCodeSection(instructions);
+        
+        return String.join("\n", assemblyCode);
+    }
+    
+    private void generateDataSection(List<TACInstruction> instructions) {
+        assemblyCode.add(".MODEL SMALL");
+        assemblyCode.add(".STACK 100h");
+        assemblyCode.add(".DATA");
+        
+        // Collect variables
+        for (TACInstruction instr : instructions) {
+            if (instr.result != null && !instr.result.matches("-?\\d+")) {
+                variables.add(instr.result);
+            }
+            if (instr.arg1 != null && !instr.arg1.matches("-?\\d+")) {
+                variables.add(instr.arg1);
+            }
+            if (instr.arg2 != null && !instr.arg2.matches("-?\\d+")) {
+                variables.add(instr.arg2);
+            }
+        }
+        
+        // Declare variables
+        for (String var : variables) {
+            assemblyCode.add(var + " DW ?");
+        }
+    }
+    
+    private void generateCodeSection(List<TACInstruction> instructions) {
+        assemblyCode.add(".CODE");
+        assemblyCode.add("MAIN PROC");
+        assemblyCode.add("MOV AX, @DATA");
+        assemblyCode.add("MOV DS, AX");
+        
+        for (TACInstruction instr : instructions) {
+            switch (instr.operator) {
+                case "<<":
+                case ">>":
+                    generateShiftInstruction(instr);
+                    break;
+                // ... other cases remain the same
+            }
+        }
+        
+        assemblyCode.add("MOV AH, 4Ch");
+        assemblyCode.add("INT 21h");
+        assemblyCode.add("MAIN ENDP");
+        assemblyCode.add("END MAIN");
+    }
+    
+    // Test method
+    public static void main(String[] args) {
+        // Test cases for strength reduction
+        List<TACInstruction> instructions = new ArrayList<>();
+        
+        // Test case 1: Multiplication by power of 2
+        instructions.add(new TACInstruction("*", "x", "8", "t1")); // Will be optimized to left shift by 3
+        
+        // Test case 2: Multiplication by zero
+        instructions.add(new TACInstruction("*", "y", "0", "t2")); // Will be optimized to direct assignment
+        
+        // Test case 3: Division by power of 2
+        instructions.add(new TACInstruction("/", "z", "4", "t3")); // Will be optimized to right shift by 2
+        
+        // Test case 4: Multiplication by (power of 2 + 1)
+        instructions.add(new TACInstruction("*", "w", "9", "t4")); // Will be optimized to (w << 3) + w
+        
+        CompilerBackend compiler = new CompilerBackend();
+        String assemblyCode = compiler.compile(instructions);
+        System.out.println("Optimized Assembly Code:");
+        System.out.println(assemblyCode);
+    }
+}

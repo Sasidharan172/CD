@@ -1,0 +1,197 @@
+import java.util.*;
+
+// Class representing a Three Address Code instruction
+class TACInstruction {
+  String operator;
+  String arg1;
+  String arg2;
+  String result;
+
+  public TACInstruction(String operator, String arg1, String arg2, String result) {
+    this.operator = operator;
+    this.arg1 = arg1;
+    this.arg2 = arg2;
+    this.result = result;
+  }
+}
+
+// Main compiler class
+public class CompilerBackend {
+  private List<String> assemblyCode;
+  private Set<String> variables;
+  private int tempCount;
+  private int labelCount;
+
+  public CompilerBackend() {
+    this.assemblyCode = new ArrayList<>();
+    this.variables = new HashSet<>();
+    this.tempCount = 0;
+    this.labelCount = 0;
+  }
+
+  // Generate a unique label
+  private String generateLabel() {
+    return "L" + (++labelCount);
+  }
+
+  // Get the assembly representation of an operand
+  private String getOperandValue(String operand) {
+    if (operand == null)
+      return "";
+
+    if (operand.matches("-?\\d+")) { // If operand is a number
+      return operand;
+    } else if (operand.startsWith("t")) { // If operand is a temporary
+      return "WORD PTR [_" + operand + "]";
+    } else { // If operand is a variable
+      return "WORD PTR [" + operand + "]";
+    }
+  }
+
+  // Generate data section with variable declarations
+  private void generateDataSection(List<TACInstruction> instructions) {
+    assemblyCode.add(".MODEL SMALL");
+    assemblyCode.add(".STACK 100h");
+    assemblyCode.add(".DATA");
+
+    // Collect all variables and temporaries
+    for (TACInstruction instr : instructions) {
+      if (instr.result != null && !instr.result.matches("-?\\d+")) {
+        variables.add(instr.result);
+      }
+      if (instr.arg1 != null && !instr.arg1.matches("-?\\d+")) {
+        variables.add(instr.arg1);
+      }
+      if (instr.arg2 != null && !instr.arg2.matches("-?\\d+")) {
+        variables.add(instr.arg2);
+      }
+    }
+
+    // Declare all variables
+    for (String var : variables) {
+      assemblyCode.add(var + " DW ?");
+    }
+  }
+
+  // Generate arithmetic instructions
+  private void generateArithmetic(TACInstruction instr) {
+    Map<String, String> opMap = new HashMap<>();
+    opMap.put("+", "ADD");
+    opMap.put("-", "SUB");
+    opMap.put("*", "MUL");
+    opMap.put("/", "DIV");
+
+    if (instr.operator.equals("+") || instr.operator.equals("-")) {
+      assemblyCode.add("MOV AX, " + getOperandValue(instr.arg1));
+      assemblyCode.add(opMap.get(instr.operator) + " AX, " + getOperandValue(instr.arg2));
+      assemblyCode.add("MOV " + getOperandValue(instr.result) + ", AX");
+    } else if (instr.operator.equals("*") || instr.operator.equals("/")) {
+      assemblyCode.add("MOV AX, " + getOperandValue(instr.arg1));
+      assemblyCode.add("CWD"); // Convert word to doubleword
+      assemblyCode.add("MOV BX, " + getOperandValue(instr.arg2));
+      assemblyCode.add(opMap.get(instr.operator) + " BX");
+      assemblyCode.add("MOV " + getOperandValue(instr.result) + ", AX");
+    }
+  }
+
+  // Generate assignment instructions
+  private void generateAssignment(TACInstruction instr) {
+    assemblyCode.add("MOV AX, " + getOperandValue(instr.arg1));
+    assemblyCode.add("MOV " + getOperandValue(instr.result) + ", AX");
+  }
+
+  // Generate conditional jump instructions
+  private void generateConditionalJump(TACInstruction instr) {
+    Map<String, String> conditionMap = new HashMap<>();
+    conditionMap.put("==", "JE");
+    conditionMap.put("!=", "JNE");
+    conditionMap.put("<", "JL");
+    conditionMap.put("<=", "JLE");
+    conditionMap.put(">", "JG");
+    conditionMap.put(">=", "JGE");
+
+    assemblyCode.add("MOV AX, " + getOperandValue(instr.arg1));
+    assemblyCode.add("CMP AX, " + getOperandValue(instr.arg2));
+    assemblyCode.add(conditionMap.get(instr.operator) + " " + instr.result);
+  }
+
+  // Generate unconditional jump instructions
+  private void generateUnconditionalJump(TACInstruction instr) {
+    assemblyCode.add("JMP " + instr.result);
+  }
+
+  // Generate label
+  private void generateLabel(TACInstruction instr) {
+    assemblyCode.add(instr.result + ":");
+  }
+
+  // Main compile method
+  public String compile(List<TACInstruction> instructions) {
+    // Generate data section
+    generateDataSection(instructions);
+
+    // Start code section
+    assemblyCode.add(".CODE");
+    assemblyCode.add("MAIN PROC");
+    assemblyCode.add("MOV AX, @DATA");
+    assemblyCode.add("MOV DS, AX");
+
+    // Process each instruction
+    for (TACInstruction instr : instructions) {
+      switch (instr.operator) {
+        case "+":
+        case "-":
+        case "*":
+        case "/":
+          generateArithmetic(instr);
+          break;
+        case "=":
+          generateAssignment(instr);
+          break;
+        case "==":
+        case "!=":
+        case "<":
+        case "<=":
+        case ">":
+        case ">=":
+          generateConditionalJump(instr);
+          break;
+        case "goto":
+          generateUnconditionalJump(instr);
+          break;
+        case "label":
+          generateLabel(instr);
+          break;
+      }
+    }
+
+    // End program
+    assemblyCode.add("MOV AH, 4Ch");
+    assemblyCode.add("INT 21h");
+    assemblyCode.add("MAIN ENDP");
+    assemblyCode.add("END MAIN");
+
+    // Join all lines with newlines
+    return String.join("\n", assemblyCode);
+  }
+
+  // Test method
+  public static void main(String[] args) {
+    // Create test instructions
+    List<TACInstruction> instructions = new ArrayList<>();
+    instructions.add(new TACInstruction("=", "10", null, "a"));
+    instructions.add(new TACInstruction("=", "20", null, "b"));
+    instructions.add(new TACInstruction("+", "a", "b", "t1"));
+    instructions.add(new TACInstruction("*", "t1", "2", "t2"));
+    instructions.add(new TACInstruction("label", null, null, "loop_start"));
+    instructions.add(new TACInstruction("<=", "t2", "100", "loop_end"));
+    instructions.add(new TACInstruction("+", "t2", "1", "t2"));
+    instructions.add(new TACInstruction("goto", null, null, "loop_start"));
+    instructions.add(new TACInstruction("label", null, null, "loop_end"));
+
+    // Create compiler and generate code
+    CompilerBackend compiler = new CompilerBackend();
+    String assemblyCode = compiler.compile(instructions);
+    System.out.println(assemblyCode);
+  }
+};

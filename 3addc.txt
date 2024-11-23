@@ -1,0 +1,79 @@
+// lexer.l
+%{
+#include <stdio.h>
+#include <string.h>
+#include "y.tab.h"
+extern YYSTYPE yylval;
+%}
+
+%%
+[0-9]+          { yylval.val = atoi(yytext); return NUM; }
+[a-zA-Z][a-zA-Z0-9]*    { strcpy(yylval.var, yytext); return ID; }
+[ \t]           ;
+[\n]            return 0;
+.               return yytext[0];
+%%
+
+int yywrap() {
+    return 1;
+}
+
+
+
+
+// parser.y
+%{
+#include <stdio.h>
+#include <string.h>
+
+int temp_var = 0;
+char addtotemp[2] = "t";
+
+int yylex();
+void yyerror(char *s);
+%}
+
+%union {
+    char var[10];
+    int val;
+}
+
+%token <val> NUM
+%token <var> ID
+%type <val> expr term factor
+
+%left '+' '-'
+%left '*' '/'
+%right UMINUS
+
+%%
+stmt    : expr              { printf("\nAccepted\n"); }
+        ;
+
+expr    : expr '+' term     { printf("t%d = t%d + t%d\n", temp_var, $1, $3); $$ = temp_var++; }
+        | expr '-' term     { printf("t%d = t%d - t%d\n", temp_var, $1, $3); $$ = temp_var++; }
+        | term             { $$ = $1; }
+        ;
+
+term    : term '*' factor   { printf("t%d = t%d * t%d\n", temp_var, $1, $3); $$ = temp_var++; }
+        | term '/' factor   { printf("t%d = t%d / t%d\n", temp_var, $1, $3); $$ = temp_var++; }
+        | factor           { $$ = $1; }
+        ;
+
+factor  : '(' expr ')'      { $$ = $2; }
+        | NUM              { printf("t%d = %d\n", temp_var, $1); $$ = temp_var++; }
+        | ID               { printf("t%d = %s\n", temp_var, $1); $$ = temp_var++; }
+        | '-' factor %prec UMINUS { printf("t%d = -t%d\n", temp_var, $2); $$ = temp_var++; }
+        ;
+
+%%
+
+void yyerror(char *s) {
+    printf("Error: %s\n", s);
+}
+
+int main() {
+    printf("Enter the expression (end with newline):\n");
+    yyparse();
+    return 0;
+}

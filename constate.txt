@@ -1,0 +1,107 @@
+// lexer.l
+%{
+    #include <stdio.h>
+    #include <string.h>
+    #include "y.tab.h"
+    extern int yylval;
+%}
+
+%%
+[ \t\n]+    ; /* Skip whitespace */
+"if"        { return IF; }
+"else"      { return ELSE; }
+"("         { return LPAREN; }
+")"         { return RPAREN; }
+"{"         { return LBRACE; }
+"}"         { return RBRACE; }
+">"         { return GT; }
+"<"         { return LT; }
+"=="        { return EQ; }
+">="        { return GE; }
+"<="        { return LE; }
+"!="        { return NE; }
+[0-9]+      { return NUMBER; }
+[a-zA-Z][a-zA-Z0-9]* { return ID; }
+.           { return yytext[0]; }
+%%
+
+int yywrap() {
+    return 1;
+}
+
+
+
+// parser.y
+%{
+    #include <stdio.h>
+    #include <stdlib.h>
+    void yyerror(const char *s);
+    extern int yylex();
+%}
+
+%token IF ELSE LPAREN RPAREN LBRACE RBRACE
+%token GT LT EQ GE LE NE
+%token NUMBER ID
+
+%%
+program: 
+    | program control_statement
+    ;
+
+control_statement:
+    if_statement          { printf("Control statement recognized\n"); }
+    ;
+
+if_statement:
+    IF LPAREN condition RPAREN compound_statement else_part
+    ;
+
+else_part:
+    /* empty */                              { printf("Simple if statement\n"); }
+    | ELSE compound_statement                { printf("If-else statement\n"); }
+    | ELSE if_statement                      { printf("Else-if statement\n"); }
+    ;
+
+compound_statement:
+    LBRACE statement_list RBRACE
+    ;
+
+statement_list:
+    /* empty */
+    | statement_list statement
+    ;
+
+statement:
+    control_statement
+    | other_statement
+    ;
+
+other_statement:
+    expression ';'
+    ;
+
+condition:
+    expression relop expression
+    | expression
+    ;
+
+expression:
+    NUMBER
+    | ID
+    ;
+
+relop:
+    GT | LT | EQ | GE | LE | NE
+    ;
+
+%%
+
+void yyerror(const char *s) {
+    fprintf(stderr, "Error: %s\n", s);
+}
+
+int main() {
+    printf("Enter control structures (Ctrl+D to end):\n");
+    yyparse();
+    return 0;
+}
