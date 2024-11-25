@@ -1,0 +1,60 @@
+import java.util.Scanner;
+public class Main {
+private static String xor(String a, String b) {
+StringBuilder result = new StringBuilder();
+for (int i = 1; i < b.length(); i++) {
+result.append(a.charAt(i) == b.charAt(i) ? '0' : '1');
+}
+return result.toString();
+}
+private static String divide(String dividend, String divisor) {
+int pick = divisor.length();
+String tmp = dividend.substring(0, pick);
+while (pick < dividend.length()) {
+if (tmp.charAt(0) == '1') {
+tmp = xor(divisor, tmp) + dividend.charAt(pick);
+} else {
+tmp = xor("0".repeat(pick), tmp) + dividend.charAt(pick);
+}
+pick += 1;
+}
+if (tmp.charAt(0) == '1') {
+
+tmp = xor(divisor, tmp);
+} else {
+tmp = xor("0".repeat(pick), tmp);
+}
+return tmp;
+}
+private static String encodeData(String data, String divisor) {
+int dataLen = data.length();
+String appendedData = data + "0".repeat(divisor.length() - 1);
+String remainder = divide(appendedData, divisor);
+return data + remainder; // Return the encoded data (data + CRC)
+}
+private static boolean checkData(String receivedData, String divisor) {
+String remainder = divide(receivedData, divisor);
+// If remainder is all zeros, then no error
+return !remainder.contains("1");
+}
+public static void main(String[] args) {
+Scanner scanner = new Scanner(System.in);
+System.out.print("Enter data (binary): ");
+String data = scanner.next();
+System.out.print("Enter generator polynomial (binary): ");
+String generator = scanner.next();
+// Encode data with CRC
+String encodedData = encodeData(data, generator);
+System.out.println("Encoded data (with CRC): " + encodedData);
+// Simulate transmission
+System.out.print("Enter received data (binary): ");
+String receivedData = scanner.next();
+// Check for errors
+if (checkData(receivedData, generator)) {
+System.out.println("No error detected in received data.");
+} else {
+System.out.println("Error detected in received data.");
+}
+scanner.close();
+}
+}
