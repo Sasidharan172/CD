@@ -1,0 +1,41 @@
+public class linkstate {
+public static final int V = 3;
+public static int minDis(int[] dist, int[] known) {
+int min = 999, min_index = -1;
+for (int v = 0; v < V; v++) {
+if (known[v] == 0 && dist[v] <= min) { min = dist[v]; min_index = v; }
+}
+return min_index;
+}
+public static void main(String[] args) {
+int[][] graph = {
+{0, 5, 2},
+{5, 0, 9},
+{2, 9, 0}
+};
+int INT_MAX = 999;
+int[] dist = new int[V];
+int[] known = new int[V];
+
+for(int src = 0; src < V; src++) {
+for (int i = 0; i < V; i++) { dist[i] = INT_MAX; known[i] = 0; }
+dist[src] = 0;
+for (int count = 0; count < V - 1; count++) {
+int u = minDis(dist, known);
+known[u] = 1;
+for (int v = 0; v < V; v++) {
+if (known[v] != 1 && graph[u][v] != 0 && dist[u] != INT_MAX && dist[u] + graph[u][v]
+< dist[v]) {
+
+dist[v] = dist[u] + graph[u][v];
+}
+}
+}
+System.out.println(" ROUTER " + src + " \t\tCOST");
+for (int i = 0; i < V; i++) {
+System.out.println("\t " + i + " \t\t" + dist[i]);
+}
+System.out.println("\n\n");
+}
+}
+}
